@@ -1,0 +1,40 @@
+#!/bin/bash
+
+LOGFILE="/var/log/monitoring.log"
+STATEFILE="/var/run/test-monitor.pid"
+PROCESS_NAME="test"
+URL="https://test.com/monitoring/test/api"
+
+timestamp() {
+    date +"%Y-%m-%d %H:%M:%S"
+}
+
+# Проверяем, запущен ли процесс test
+PID=$(pgrep -f "$PROCESS_NAME" | head -n 1)
+
+if [ -z "$PID" ]; then
+    # процесса нет — ничего не делаем
+    exit 0
+fi
+
+# Проверка на перезапуск
+if [ -f "$STATEFILE" ]; then
+    OLD_PID=$(cat "$STATEFILE")
+else
+    OLD_PID=""
+fi
+
+# Если PID изменился → процесс перезапустился
+if [ "$PID" != "$OLD_PID" ]; then
+    echo "$(timestamp) — Процесс '$PROCESS_NAME' перезапущен (PID: $PID)" >> "$LOGFILE"
+    echo "$PID" > "$STATEFILE"
+fi
+
+# Проверяем доступность мониторинг-сервера
+curl -s -o /dev/null -w "%{http_code}" "$URL" | grep -q "200"
+
+if [ $? -ne 0 ]; then
+    echo "$(timestamp) — Сервер мониторинга недоступен: $URL" >> "$LOGFILE"
+fi
+
+exit 0
